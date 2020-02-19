@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Rainbow Canvas</title>
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" type="image/x-icon">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" type="image/x-icon">
+  <link rel="manifest" href="site.webmanifest">
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.js"></script>
+  <style>
+    html,
+    body {
+      position: relative;
+      box-sizing: content-box;
+      height: 100%;
+      width: 100%;
+      margin: 0px;
+      padding: 0px;
+      background-color: #232323;
+    }
+
+    html>* {
+      touch-action: none;
+    }
+
+    #canvasDiv {
+      box-sizing: content-box;
+      height: 100%;
+      width: 100%;
+      display: block;
+    }
+
+    canvas {
+      box-sizing: content-box;
+      height: 100vh;
+      width: 100vw;
+    }
+  </style>
+
+
+</head>
+
+
+<body>
+  <div id="canvasDiv"></div>
+  <script type="text/javascript">
+
+    var canvasDiv = document.getElementById('canvasDiv');
+    canvas = document.createElement('canvas');
+    canvas.setAttribute('id', 'canvas');
+
+    var clickHistory = new Array();
+    var clickCounter = 0;
+    var lastProcessedClick = 0;
+    var paint;
+
+    function resizeCanvas() {
+      lastProcessedClick = 0;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      redraw();
+    }
+
+    canvasDiv.appendChild(canvas);
+
+    if (typeof G_vmlCanvasManager != 'undefined') {
+      canvas = G_vmlCanvasManager.initElement(canvas);
+    }
+    context = canvas.getContext('2d', {
+      desynchronized: true,
+      preserveDrawingBuffer: true
+    });
+
+    $('#canvas').on("pointerdown", function (e) {
+      if (this.setPointerCapture) {
+        this.setPointerCapture(e.pointerId);
+      }
+
+      var mouseX = e.pageX - this.offsetLeft;
+      var mouseY = e.pageY - this.offsetTop;
+
+      paint = true;
+      addClick(mouseX, mouseY);
+
+      redraw();
+    });
+
+    $('#canvas').on("pointermove", function (e) {
+      if (paint) {
+        var eventsProcessed = false;
+        if (e.originalEvent.getCoalescedEvents) {
+          var pointerEvents = e.originalEvent.getCoalescedEvents();
+          if (pointerEvents) {
+            for (const coalescedEvent in pointerEvents) {
+              if (pointerEvents.hasOwnProperty(coalescedEvent)) {
+                const element = pointerEvents[coalescedEvent];
+                addClick(element.pageX - this.offsetLeft, element.pageY - this.offsetTop, true);
+                eventsProcessed = true;
+              }
+            }
+          }
+        }
+
+        if (!eventsProcessed) {
+          addClick(e.pageX - this.offsetLeft, e.pageY - this.offsetTop, true);
+        }
+
+        redraw();
+      }
+    });
+
+    $('#canvas').on("pointerup", function (e) {
+      paint = false;
+    });
+
+    $('#canvas').on("pointerleave", function (e) {
+      paint = false;
+    });
+
+    function addClick(x, y, dragging) {
+      clickHistory.push({
+        x: x,
+        y: y,
+        dragging: dragging,
+        color: getColorGradient(clickCounter++)
+      });
+    }
+
+    function convertRgbValuesToHexColor(red, green, blue) {
+      return (
+          '#' +
+            convertByteToHex(red) +
+            convertByteToHex(green) +
+            convertByteToHex(blue)
+      );
+    }
+
+    function convertByteToHex(n) {
+      return (((n >> 4) & 0x0F).toString(16) + (n & 0x0F).toString(16));
+    }
+
+    function getColorGradient(i) {
+      let frequency1 = 0.050;
+      let frequency2 = 0.050;
+      let frequency3 = 0.050;
+      let phase1 = 0;
+      let phase2 = 2;
+      let phase3 = 4;
+      let center = 128;
+      let width = 127;
+
+      let red = Math.sin(frequency1 * i + phase1) * width + center;
+      let green = Math.sin(frequency2 * i + phase2) * width + center;
+      let blue = Math.sin(frequency3 * i + phase3) * width + center;
+
+      return convertRgbValuesToHexColor(red, green, blue);
+    }
+
+    function distanceApprox(pointA, pointB) {
+      // Approximation by using the octagons approach
+      var deltaX = Math.abs(pointB.x - pointA.x);
+      var deltaY = Math.abs(pointB.y - pointA.y);
+      return 1.42677669 * Math.min(0.707106781 * (deltaX + deltaY), Math.max(deltaX, deltaY));
+    }
+
+    function redraw() {
+      // context.clearRect(0, 0, context.canvas.width, context.canvas.height); // Clears the canvas
+
+      context.lineJoin = "round";
+
+      for (var i = lastProcessedClick; i < clickHistory.length; i++) {
+
+        var currentPoint  = clickHistory[i];
+        var previousPoint = i >= 1 ? clickHistory[i - 1] : null;
+        var elderPoint    = i >= 2 ? clickHistory[i - 2] : null;
+
+        context.lineWidth = 8;
+        context.strokeStyle = currentPoint.color;
+
+        if (currentPoint.dragging && previousPoint) {
+          // var distance = distanceApprox(currentPoint, previousPoint);
+          // context.lineWidth = Math.max(2, Math.min(10, 10 * (20 / distance)));
+        }
+
+        context.beginPath();
+        if (currentPoint.dragging && previousPoint) {
+          context.moveTo(previousPoint.x, previousPoint.y);
+          context.lineTo(currentPoint.x, currentPoint.y);
+        } else {
+          context.moveTo(currentPoint.x - 1, currentPoint.y);
+          context.lineTo(currentPoint.x, currentPoint.y);
+        }
+
+        context.closePath();
+        context.stroke();
+      }
+
+      lastProcessedClick = clickHistory.length;
+    }
+
+    window.addEventListener('resize', resizeCanvas, false);
+    resizeCanvas();
+
+  </script>
+</body>
+
+</html>
